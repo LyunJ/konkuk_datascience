@@ -14,51 +14,57 @@ from sqlalchemy import create_engine
 
 
 def classification_performance_eval(y, y_predict):
+
+    matrix = [[0, 0, 0], [0, 0, 0], [0, 0, 0]]
+
+    for y, p in zip(y, y_predict):
+        if p == 'A':
+            if y == 'A':
+                matrix[0][0] += 1
+            if y == 'B':
+                matrix[0][1] += 1
+            if y == 'C':
+                matrix[0][2] += 1
+        if p == 'B':
+            if y == 'A':
+                matrix[1][0] += 1
+            if y == 'B':
+                matrix[1][1] += 1
+            if y == 'C':
+                matrix[1][2] += 1
+        if p == 'C':
+            if y == 'A':
+                matrix[2][0] += 1
+            if y == 'B':
+                matrix[2][1] += 1
+            if y == 'C':
+                matrix[2][2] += 1
+
+    matrix = np.array(matrix)
+    sums = matrix.sum()
+
     tp, tn, fp, fn = 0, 0, 0, 0
-    for y, yp in zip(y, y_predict):
-        if y == 1 and yp == 1:
-            tp += 1
-        elif y == 1 and yp == -1:
-            fn += 1
-        elif y == -1 and yp == 1:
-            fp += 1
-        else:
-            tn += 1
+    accuracy = []
+    precision = []
+    recall = []
+    f1_score = []
+    for i in range(3):
+        tp = matrix[i][i]
+        for j in range(3):
+            fp += matrix[i][j] if (i != j) else 0
+            fn += matrix[j][i] if (i != j) else 0
+        tn = sums - tp - fp - fn
+        acc = (tp + tn)/(tp + tn + fp + fn)
+        pre = (tp)/(tp + fp)
+        rec = (tp)/(tp + fn)
+        f1 = 2*pre*rec/(pre+rec)
+        accuracy.append(acc)
+        precision.append(pre)
+        recall.append(rec)
+        f1_score.append(f1)
 
-    accuracy = (tp + tn)/(tp + tn + fp + fn)
-    precision = (tp)/(tp + fp)
-    recall = (tp)/(tp + fn)
-    f1_score = 2*precision*recall/(precision+recall)
+    return statistics.mean(accuracy), statistics.mean(precision), statistics.mean(recall), statistics.mean(f1_score)
 
-    return accuracy, precision, recall, f1_score
-
-
-def binary_classification_performance_eval(y, y_predict):
-    tp, tn, fp, fn = 0, 0, 0, 0
-    for y, yp in zip(y, y_predict):
-        if y == 1 and yp == 1:
-            tp += 1
-        elif y == 1 and yp == 0:
-            fn += 1
-        elif y == 0 and yp == 1:
-            fp += 1
-        else:
-            tn += 1
-
-    accuracy = (tp + tn)/(tp + tn + fp + fn)
-    precision = (tp)/(tp + fp)
-    recall = (tp)/(tp + fn)
-    f1_score = 0 if (precision+recall == 0) else 2 * \
-        precision*recall/(precision+recall)
-
-    return accuracy, precision, recall, f1_score
-
-
-# xlsxfile = 'db_score_3_labels.xlsx'
-# df = pandas.read_excel(xlsxfile)
-# conn = create_engine(
-#     'mysql+pymysql://lyunj:Dldbswo77@@localhost:3306/konkuk_datascience', echo=False)
-# df.to_sql(name='db_score_3', con=conn, if_exists='append', index=False)
 
 conn = pymysql.connect(host='localhost', user='lyunj',
                        password='Dldbswo77@', db='konkuk_datascience', charset='utf8')
@@ -72,10 +78,11 @@ data = curs.fetchall()
 curs.close()
 conn.close()
 
+
 X = [(t['homework'], t['discussion'], t['midterm']) for t in data]
 X = np.array(X)
 
-y = [1 if (t['grade'] == 'B') else -1 for t in data]
+y = [t['grade'] for t in data]
 y = np.array(y)
 
 X_train, X_test, y_train, y_test = train_test_split(
@@ -98,17 +105,12 @@ print("svm_precision=%f" % prec)
 print("svm_recall=%f" % rec)
 print("svm_f1_score=%f" % f1)
 
-LR_y_train = [0 if (t == -1) else 1 for t in y_train]
-LR_y_train = np.array(LR_y_train)
-LR_y_test = [0 if (t == -1) else 1 for t in y_test]
-LR_y_test = np.array(LR_y_test)
-
 LR = LogisticRegression(C=100, random_state=0)
-LR.fit(X_train_std, LR_y_train)
+LR.fit(X_train_std, y_train)
 y_predict = LR.predict(X_test_std)
 
-acc, prec, rec, f1 = binary_classification_performance_eval(
-    LR_y_test, y_predict)
+acc, prec, rec, f1 = classification_performance_eval(
+    y_test, y_predict)
 
 print("LR_accuracy=%f" % acc)
 print("LR_precision=%f" % prec)
@@ -177,16 +179,11 @@ for train_index, test_index in kf.split(X):
     X_train_std = sc.transform(X_train)
     X_test_std = sc.transform(X_test)
 
-    LR_y_train = [0 if (t == -1) else 1 for t in y_train]
-    LR_y_train = np.array(LR_y_train)
-    LR_y_test = [0 if (t == -1) else 1 for t in y_test]
-    LR_y_test = np.array(LR_y_test)
-
     LR = LogisticRegression(C=100, random_state=0)
-    LR.fit(X_train_std, LR_y_train)
+    LR.fit(X_train_std, y_train)
     y_predict = LR.predict(X_test_std)
-    acc, prec, rec, f1 = binary_classification_performance_eval(
-        LR_y_test, y_predict)
+    acc, prec, rec, f1 = classification_performance_eval(
+        y_test, y_predict)
     accuracy.append(acc)
     precision.append(prec)
     recall.append(rec)
